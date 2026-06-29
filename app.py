@@ -4,7 +4,7 @@ import pickle
 import numpy as np
 
 # Load the trained model
-with open('../Model/best_model.pkl', 'rb') as file:
+with open('best_model.pkl', 'rb') as file:
     model = pickle.load(file)
 
 st.title("Student Performance Prediction System")
