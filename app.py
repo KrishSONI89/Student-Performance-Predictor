@@ -2,15 +2,15 @@ import streamlit as st
 import pandas as pd
 import pickle
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="Student Performance", page_icon="🎓", layout="wide", initial_sidebar_state="expanded")
 
 # --- CUSTOM CSS FOR UI STYLING ---
-# This block injects custom HTML/CSS to create the beautiful gradient hero section and metric cards
 st.markdown("""
 <style>
-    /* Hero Banner Styling */
     .hero-container {
         background: linear-gradient(135deg, #0B192C 0%, #1A365D 50%, #00A896 100%);
         border-radius: 24px;
@@ -49,8 +49,6 @@ st.markdown("""
         font-weight: 600;
         border: 1px solid rgba(255, 255, 255, 0.2);
     }
-
-    /* Metric Cards Styling */
     .metrics-wrapper {
         display: flex;
         justify-content: space-between;
@@ -82,6 +80,20 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# --- CACHE DATA LOADING ---
+@st.cache_data
+def load_data():
+    try:
+        # Tries to load the dataset for the analytics page
+        return pd.read_csv('student_performance.csv')
+    except FileNotFoundError:
+        try:
+            return pd.read_csv('Dataset/student_performance.csv')
+        except FileNotFoundError:
+            return None
+
+df = load_data()
+
 # --- LOAD MODEL ---
 try:
     with open('best_model.pkl', 'rb') as file:
@@ -92,12 +104,10 @@ except FileNotFoundError:
 
 # --- SIDEBAR NAVIGATION ---
 st.sidebar.title("📌 Navigation")
-page = st.sidebar.radio("Go to:", ["🏠 Home", "🎯 Single Prediction", "ℹ️ About Project"])
+page = st.sidebar.radio("Go to:", ["🏠 Home", "🎯 Single Prediction", "📊 Data Analytics", "ℹ️ About Project"])
 
 # --- PAGE 1: HOME ---
 if page == "🏠 Home":
-    
-    # 1. Custom Hero Banner
     st.markdown("""
         <div class="hero-container">
             <div style="font-size: 3rem; margin-bottom: 10px;">🎓</div>
@@ -111,7 +121,6 @@ if page == "🏠 Home":
         </div>
     """, unsafe_allow_html=True)
     
-    # 2. Custom Metric Cards (Matching the 4-box layout)
     st.markdown("""
         <div class="metrics-wrapper">
             <div class="metric-card">
@@ -166,10 +175,75 @@ elif page == "🎯 Single Prediction":
             prediction = np.clip(prediction, 10, 100) 
             
             st.success(f"📈 **Predicted Performance Index: {prediction:.2f} / 100**")
+            
+            # POST-RESULT ANALYSIS CHART
+            st.subheader("📊 Performance Analysis")
+            if df is not None:
+                avg_score = df['Performance_Index'].mean()
+                
+                fig, ax = plt.subplots(figsize=(8, 4))
+                ax.bar(['Average Student', 'This Student (Predicted)'], [avg_score, prediction], color=['#1A365D', '#00A896'])
+                ax.set_ylabel('Performance Index')
+                ax.set_ylim(0, 100)
+                for i, v in enumerate([avg_score, prediction]):
+                    ax.text(i, v + 2, f"{v:.1f}", ha='center', fontweight='bold')
+                st.pyplot(fig)
+            else:
+                st.info("Upload dataset to view comparison graphs.")
         else:
             st.error("Model is not loaded. Cannot make predictions.")
 
-# --- PAGE 3: ABOUT PROJECT ---
+# --- PAGE 3: DATA ANALYTICS (NEW!) ---
+elif page == "📊 Data Analytics":
+    st.title("📊 Exploratory Data Analysis")
+    st.write("Visualizing the relationships between study habits and student performance.")
+    
+    if df is not None:
+        # Create tabs for organized viewing
+        tab1, tab2, tab3, tab4 = st.tabs(["📉 Histogram", "📐 Scatter Plot", "📦 Boxplot", "🌡️ Heatmap"])
+        
+        # Plot styling for dark mode
+        plt.style.use('dark_background')
+        
+        with tab1:
+            st.subheader("Distribution of Performance Scores")
+            fig, ax = plt.subplots(figsize=(10, 5))
+            sns.histplot(df['Performance_Index'], bins=30, kde=True, color='#00A896', ax=ax)
+            ax.set_xlabel("Performance Index")
+            st.pyplot(fig)
+            
+        with tab2:
+            st.subheader("Hours Studied vs. Performance")
+            fig, ax = plt.subplots(figsize=(10, 5))
+            sns.scatterplot(data=df, x='Hours_Studied', y='Performance_Index', alpha=0.6, color='#1A365D', ax=ax)
+            ax.set_xlabel("Hours Studied")
+            ax.set_ylabel("Performance Index")
+            st.pyplot(fig)
+            
+        with tab3:
+            st.subheader("Impact of Extracurricular Activities")
+            fig, ax = plt.subplots(figsize=(10, 5))
+            # Handle encoded vs unencoded data gracefully
+            if df['Extracurricular_Activities'].dtype in ['int64', 'int32']:
+                df['Extra_Label'] = df['Extracurricular_Activities'].map({1: 'Yes', 0: 'No'})
+                sns.boxplot(data=df, x='Extra_Label', y='Performance_Index', palette="Set2", ax=ax)
+                ax.set_xlabel("Participates in Extracurriculars")
+            else:
+                sns.boxplot(data=df, x='Extracurricular_Activities', y='Performance_Index', palette="Set2", ax=ax)
+            st.pyplot(fig)
+            
+        with tab4:
+            st.subheader("Feature Correlation Heatmap")
+            fig, ax = plt.subplots(figsize=(10, 6))
+            # Only correlate numerical columns
+            numeric_df = df.select_dtypes(include=[np.number])
+            sns.heatmap(numeric_df.corr(), annot=True, cmap="mako", fmt=".2f", ax=ax)
+            st.pyplot(fig)
+            
+    else:
+        st.warning("⚠️ Dataset not found. Please upload 'student_performance.csv' to the GitHub repository to view analytics.")
+
+# --- PAGE 4: ABOUT PROJECT ---
 elif page == "ℹ️ About Project":
     st.title("ℹ️ About This Project")
     st.markdown("""
